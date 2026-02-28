@@ -1,0 +1,41 @@
+name: Stage Deploy
+on:
+  push:
+    branches:
+      - develop
+
+permissions: write-all
+
+concurrency:
+  group: stage-deploy
+  cancel-in-progress: true
+
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/reusable-deploy-config.yml
+    with:
+      domain: nextjs-super-boilerplate-stage.visn-ai.io
+      api_env: stage
+      env_file: .env.stage
+      nginx_mode: https
+      certbot_test_mode: false
+      migrations_run: false
+      blue_green_enabled: false
+      deploy_mode: 'registry'
+      node_version: 24
+      registry_subname: 'registry.example'
+      notigy_enabled: true
+      tag: 'tag.example'
+      grafana_enabled: true
+      certbot_email: example@example.com
+
+    secrets:
+      server_host: ${{ secrets.STAGE_WEB_HOST }}
+      server_username: ${{ secrets.STAGE_WEB_USERNAME }}
+      server_password: ${{ secrets.STAGE_WEB_PASSWORD }}
+      env: ${{ secrets.WEB_ENV_STAGE }}
+      ghcr_username: ${{ secrets.GHCR_USERNAME }}
+      ghcr_token: ${{ secrets.GHCR_TOKEN }}
+      tg_token: ${{ secrets.TG_TOKEN }}
+      tg_chat_id: ${{ secrets.TG_CHAT_ID }}
+      tg_thread_id: ${{ secrets.TG_THREAD_ID }}

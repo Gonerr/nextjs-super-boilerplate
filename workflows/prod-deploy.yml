@@ -1,0 +1,41 @@
+name: Production Deploy
+on:
+  push:
+    branches:
+      - main
+
+permissions: write-all
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: true
+
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/reusable-deploy-config.yml
+    with:
+      domain: nextjs-super-boilerplate.visn-ai.io
+      api_env: prod
+      env_file: .env.prod
+      nginx_mode: https
+      certbot_test_mode: false
+      migrations_run: false
+      blue_green_enabled: true
+      deploy_mode: 'registry'
+      node_version: 24
+      registry_subname: 'sapian-web'
+      notigy_enabled: true
+      grafana_enabled: true
+      tag: 'web'
+      certbot_email: example@example.com
+
+    secrets:
+      server_host: ${{ secrets.PROD_WEB_HOST }}
+      server_username: ${{ secrets.PROD_WEB_USERNAME }}
+      server_password: ${{ secrets.PROD_WEB_PASSWORD }}
+      env: ${{ secrets.WEB_ENV_PROD }}
+      ghcr_username: ${{ secrets.GHCR_USERNAME }}
+      ghcr_token: ${{ secrets.GHCR_TOKEN }}
+      tg_token: ${{ secrets.TG_TOKEN }}
+      tg_chat_id: ${{ secrets.TG_CHAT_ID }}
+      tg_thread_id: ${{ secrets.TG_THREAD_ID }}

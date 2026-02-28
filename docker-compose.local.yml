@@ -1,0 +1,397 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.45.2
+    container_name: prometheus
+    restart: always
+    user: root
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - ./grafana/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./grafana/prometheus/data:/prometheus
+    networks:
+      - api_network
+    depends_on:
+      - nginx
+      - core-api
+    expose:
+      - 9090
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  nginx-prometheus-exporter:
+    image: nginx/nginx-prometheus-exporter:1.0
+    restart: always
+    container_name: prometheus-nginx-exporter
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command:
+      - -nginx.scrape-uri=https://nginx-container/nginx_status
+    expose: 
+      - 9113
+    networks:
+      - api_network
+    depends_on:
+      - prometheus
+      - nginx
+      - core-api
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  prometheus-node-exporter:
+    image: prom/node-exporter:v1.7.0
+    restart: always
+    container_name: prometheus-node-exporter
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command: 
+      - '--path.procfs=/host/proc' 
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    networks:
+      - api_network
+    privileged: true
+    depends_on:
+      - prometheus
+      - nginx
+      - core-api
+    expose:
+      - 9100
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    restart: always
+    container_name: cadvisor
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      - prometheus
+      - nginx
+      - core-api
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    expose:
+      - 8081
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  promtail:
+    image: grafana/promtail:latest
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - ./grafana/promtail-config.yml:/etc/promtail/promtail-config.yml
+    command: -config.file=/etc/promtail/promtail-config.yml
+    depends_on:
+      - nginx
+      - core-api
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  loki:
+    image: grafana/loki:latest
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - ./grafana/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - api_network
+    depends_on:
+      - nginx
+      - core-api
+    expose:
+      - 3100
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - ./grafana/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf
+    networks:
+      - api_network
+    expose:
+      - 9273 # Порт для экспорта метрик Telegraf в Prometheus
+    depends_on:
+      - prometheus
+      - nginx-prometheus-exporter
+      - nginx
+      - core-api
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+    volumes:
+      - ./grafana/datasource:/etc/grafana/provisioning/datasources/
+      - ./grafana/dashboard:/etc/grafana/provisioning/dashboards/
+    expose:
+      - 3000
+    depends_on:
+      - core-api
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=K7tjxPlT2Y14DpSvA6rGLd
+      - GF_SERVER_ROOT_URL=https://${FIRST_DOMAIN:-app.example.local}/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+  # Основной API сервис (может быть переименован в blue/green)
+  core-api:
+    container_name: api-service${SUFFIX}
+    image: ${CORE_API_IMAGE:-app_core-api:latest}
+    build:
+      context: .
+      dockerfile: ./.docker/Dockerfile
+      args:
+        - API_ENV=${API_ENV:-prod}
+    volumes:
+      - ${ENV_FILE:-.env}:/usr/src/api/${ENV_FILE:-.env}:ro
+      - ./db-postgresql-certificate.${API_ENV:-prod}.crt:/usr/src/api/db-postgresql-certificate.${API_ENV:-prod}.crt:ro
+      - /usr/src/api/node_modules
+    environment:
+      - API_ENV=${API_ENV:-prod}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512M
+    networks:
+      - api_network
+
+  nginx:
+    container_name: core-nginx-service
+    environment:
+      - NGINX_MODE=${NGINX_MODE:-http}
+      - DOMAINS=${DOMAINS:-app.example.local,www.app.example.local}
+      - FIRST_DOMAIN=${FIRST_DOMAIN:-app.example.local}
+    healthcheck:
+      test: |
+        /bin/sh -c '
+        if [ "${NGINX_MODE}" = "https" ]; then
+          curl -k https://localhost/.well-known/acme-challenge/health || exit 1;
+        else
+          curl -f http://localhost/.well-known/acme-challenge/health || exit 1;
+        fi'
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: >
+      /bin/sh -c "
+      mkdir -p /var/www/certbot/.well-known/acme-challenge && 
+      echo 'OK' > /var/www/certbot/.well-known/acme-challenge/health && 
+      export DOMAINS='${DOMAINS}' &&
+      export FIRST_DOMAIN='${FIRST_DOMAIN}' &&
+      echo 'Using domains: '$DOMAINS &&
+      echo 'Using first domain: '$FIRST_DOMAIN &&
+      envsubst '$${DOMAINS} $${FIRST_DOMAIN}' < /etc/nginx/nginx.conf.template.${NGINX_MODE} > /etc/nginx/nginx.conf && 
+      nginx -t && 
+      nginx -g 'daemon off;'"
+    volumes:
+      - ./.docker/nginx/nginx.conf.template.http:/etc/nginx/nginx.conf.template.http:ro
+      - ./.docker/nginx/nginx.conf.template.https:/etc/nginx/nginx.conf.template.https:ro
+      - ./certbot/www:/var/www/certbot/:rw
+      - letsencrypt_certs:/etc/letsencrypt/:ro
+      - certbot_logs:/var/log/certbot:ro
+    build:
+      context: .
+      dockerfile: ./.docker/Dockerfile.nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    depends_on:
+      core-api:
+        condition: service_started
+      grafana:
+        condition: service_started
+
+  # Сервис для первоначального получения сертификатов
+  certbot-init:
+    container_name: service-api-certbot-init
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-example@example.com}
+      - DOMAINS=${DOMAINS:-app.example.local}
+      - CERTBOT_TEST_MODE=${CERTBOT_TEST_MODE:-false}
+    build:
+      context: .
+      dockerfile: ./.docker/Dockerfile.certbot.init
+    volumes:
+      - ./certbot/www:/var/www/certbot:rw
+      - letsencrypt_certs:/etc/letsencrypt:rw
+      - certbot_logs:/var/log/certbot:rw
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "500m"
+        max-file: "1"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    restart: "no"
+
+  # Сервис для автоматического обновления сертификатов
+  certbot:
+    container_name: service-api-certbot
+    build:
+      context: .
+      dockerfile: ./.docker/Dockerfile.certbot
+    entrypoint: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/certbot.conf"]
+    volumes:
+      - ./certbot/www:/var/www/certbot:rw
+      - letsencrypt_certs:/etc/letsencrypt:rw
+      - certbot_logs:/var/log/certbot:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-example@example.com}
+      - DOMAINS=${DOMAINS:-app.example.local}
+      - CERTBOT_TEST_MODE=${CERTBOT_TEST_MODE:-false}
+    networks:
+      - api_network
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "500m"
+        max-file: "1"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    container_name: redis${SUFFIX}
+    image: redis:7.2-alpine
+    networks:
+      - api_network
+    expose:
+      - 6379
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
+        max-size: "2g"
+        max-file: "3"
+
+volumes:
+  redis_data:
+  letsencrypt_certs:
+    name: letsencrypt_certs
+  certbot_logs:
+    name: certbot_logs
+
+networks:
+  api_network:
+    name: service-api-network
+    driver: bridge

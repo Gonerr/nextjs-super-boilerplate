@@ -3,24 +3,82 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev:local": "env-cmd -f .env.local next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "build:local": "env-cmd -f .env.local next build",
+    "build:stage": "env-cmd -f .env.stage next build",
+    "build:prod": "env-cmd -f .env.prod next build",
+    "start:local": "env-cmd -f .env.local next start",
+    "start:stage": "env-cmd -f .env.stage next start",
+    "start:prod": "env-cmd -f .env.prod next start",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\" \"test/**/*.ts\" \"test/**/*.tsx\"",
+    "lint:fix": "eslint src --fix",
+    "lint:src": "eslint src --fix",
+    "lint-staged": "lint-staged --allow-empty",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
+  },
+  "engines": {
+    "node": ">= 22.0.0",
+    "npm": ">= 11.0.0"
+  },
+  "hooks": {
+    "pre-commit": "lint-staged"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "pnpm run lint:src"
+    ]
   },
   "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.2",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tooltip": "^1.2.7",
+    "axios": "^1.10.0",
+    "class-variance-authority": "^0.7.1",
+    "clipboard": "^2.0.11",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "csstype": "^3.1.3",
+    "dayjs": "^1.11.13",
+    "env-cmd": "^10.1.0",
+    "framer-motion": "^12.23.9",
+    "globals": "^16.4.0",
+    "husky": "^9.1.7",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.544.0",
     "next": "16.1.6",
+    "radix-ui": "^1.4.2",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.61.1",
+    "react-json-pretty": "^2.2.0",
+    "react-query": "^3.39.3",
+    "tailwind-merge": "^3.3.1",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/lodash": "^4.17.20",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.37.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsdoc": "^51.3.4",
+    "eslint-plugin-prettier": "^5.5.1",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.20.5",
+    "tw-animate-css": "^1.3.6"
   }
 }

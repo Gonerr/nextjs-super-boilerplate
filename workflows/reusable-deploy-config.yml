@@ -1,0 +1,477 @@
+name: Reusable Deploy Config
+
+on:
+  workflow_call:
+    inputs:
+      domain:
+        description: Target domain
+        required: true
+        type: string
+      api_env:
+        description: API env (stage|prod|feature)
+        required: true
+        type: string
+      env_file:
+        description: .env file path
+        required: true
+        type: string
+      nginx_mode:
+        description: http|https
+        required: true
+        type: string
+      certbot_test_mode:
+        description: Use certbot staging
+        required: false
+        default: false
+        type: boolean
+      migrations_run:
+        description: Enable database migrations
+        required: false
+        default: false
+        type: boolean
+      blue_green_enabled:
+        description: Enable blue-green deployment
+        required: false
+        default: false
+        type: boolean
+      deploy_mode:
+        description: 'Deploy mode: empty/default = build on server; registry = build in CI and use image from GHCR'
+        required: false
+        default: ''
+        type: string
+
+      node_version:
+        description: Node.js version
+        required: false
+        default: 24
+        type: number
+
+      registry_subname:
+        description: 'Subname for registry image (for example: web)'
+        required: false
+        default: ''
+        type: string
+
+      notigy_enabled:
+        description: Enable notification
+        required: false
+        default: false
+        type: boolean
+
+      tag:
+        description: Tag for notification
+        required: false
+        default: ''
+        type: string
+
+      grafana_enabled:
+        description: Enable grafana
+        required: false
+        default: true
+        type: boolean
+      certbot_email:
+        description: Certbot email
+        required: false
+        default: example@example.com
+        type: string
+
+    secrets:
+      server_host:
+        required: true
+      server_username:
+        required: true
+      server_password:
+        required: true
+      env:
+        required: true
+      db_postgresql:
+        required: false
+      ghcr_username:
+        required: false
+      ghcr_token:
+        required: false
+      node_version:
+        required: false
+      registry_subname:
+        required: false
+
+      tg_token:
+        required: false
+      tg_chat_id:
+        required: false
+      tg_thread_id:
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: reusable-deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DOMAIN: ${{ inputs.domain }}
+      API_ENV: ${{ inputs.api_env }}
+      ENV_FILE: ${{ inputs.env_file }}
+      NGINX_MODE: ${{ inputs.nginx_mode }}
+      MIGRATIONS_RUN: ${{ inputs.migrations_run }}
+      DEPLOY_MODE: ${{ inputs.deploy_mode == 'registry' && 'registry' || 'default' }}
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v2
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Log start params
+        run: |
+          echo 'Event name: ${{ inputs.domain }}'
+          echo 'Ref name: ${{ inputs.api_env }}'
+          echo 'Env file: ${{ inputs.env_file }}'
+          echo 'Nginx mode: ${{ inputs.nginx_mode }}'
+          echo 'Certbot test mode: ${{ inputs.certbot_test_mode }}'
+          echo 'Certbot email: ${{ inputs.certbot_email }}'
+          echo 'Migrations run: ${{ inputs.migrations_run }}'
+          echo 'Blue-green enabled: ${{ inputs.blue_green_enabled }}'
+          echo 'Server host: ${{ secrets.server_host }}'
+
+      - name: Send Telegram Message
+        if: ${{ inputs.notigy_enabled }}
+        env:
+          TG_TOKEN: ${{ secrets.tg_token }}
+          TG_CHAT_ID: ${{ secrets.tg_chat_id }}
+          TG_THREAD_ID: ${{ secrets.tg_thread_id }}
+          TG_STATUS: start
+          TG_TAG: ${{ inputs.tag }}
+          TG_API_ENV: ${{ inputs.api_env }}
+          TG_NGINX_MODE: ${{ inputs.nginx_mode }}
+          TG_DOMAIN: ${{ inputs.domain }}
+          TG_GRAFANA_ENABLED: ${{ inputs.grafana_enabled }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_BRANCH_URL: https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}
+          GITHUB_COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+          GITHUB_AUTHOR_URL: https://github.com/${{ github.actor }}
+          GITHUB_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          bash scripts/notify-telegram.sh
+
+      - name: 📥 Install dependencies
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: Create env and service-account.json files
+        run: |
+          if [ -n "${{ secrets.env }}" ]; then echo '${{ secrets.env }}' >> ${{ inputs.env_file }}; fi
+          echo "NODE_ENV=${{ inputs.api_env }}" >> ${{ inputs.env_file }}
+          if [ -n "${{ secrets.db_postgresql }}" ]; then echo '${{ secrets.db_postgresql }}' >> db-postgresql-certificate.${{ inputs.api_env }}.crt; fi
+
+      - name: 🔐 Login to GHCR and build core-api image (registry mode)
+        if: inputs.deploy_mode == 'registry'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER}/${{ inputs.registry_subname || 'service-image' }}:${{ github.sha }}"
+          docker build -f .docker/Dockerfile --build-arg API_ENV=${{ inputs.api_env }} -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "CORE_API_IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: 🚀 Build project
+        if: inputs.deploy_mode != 'registry'
+        run: |
+          if [ "${{ inputs.api_env }}" = "stage" ]; then npm run build:stage; else npm run build:prod; fi
+
+      - name: 🗑️ Remove node_modules and .git
+        run: |
+          rm -rf node_modules .git .github
+
+      - name: 📦 Copy project files to server (to app_new)
+        uses: appleboy/scp-action@master
+        with:
+          source: "*"
+          target: "~/app_new"
+          port: 22
+          host: ${{ secrets.server_host }}
+          username: ${{ secrets.server_username }}
+          password: ${{ secrets.server_password }}
+          timeout: '300s'
+          overwrite: true
+          strip_components: 0
+
+      - name: 🗑️ Remove all tar.gz files from server
+        uses: appleboy/ssh-action@master
+        env:
+          GH_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.server_host }}
+          username: ${{ secrets.server_username }}
+          password: ${{ secrets.server_password }}
+          port: 22
+          envs: GH_USERNAME, GITHUB_TOKEN
+          script: |
+            find ~ -type f -name '*.tar.gz' -exec rm -f {} +
+
+      - name: 🚀 Prepare and run on server (Blue/Green or Cold)
+        id: deploy_run
+        uses: appleboy/ssh-action@master
+        timeout-minutes: 15
+        env:
+          GH_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CERTBOT_TEST_MODE: ${{ inputs.certbot_test_mode }}
+          CERTBOT_EMAIL: ${{ inputs.certbot_email }}
+          DOMAINS: ${{ inputs.domain }}
+          DEPLOY_MODE: ${{ env.DEPLOY_MODE }}
+          CORE_API_IMAGE: ${{ env.CORE_API_IMAGE }}
+          GHCR_USERNAME: ${{ secrets.ghcr_username }}
+          GHCR_TOKEN: ${{ secrets.ghcr_token }}
+        with:
+          host: ${{ secrets.server_host }}
+          username: ${{ secrets.server_username }}
+          password: ${{ secrets.server_password }}
+          port: 22
+          envs: GH_USERNAME, GITHUB_TOKEN, DEPLOY_MODE, CORE_API_IMAGE, GHCR_USERNAME, GHCR_TOKEN
+          command_timeout: 25m
+          script: |
+            if [ "$DEPLOY_MODE" = "registry" ]; then
+              if [ -z "$GHCR_USERNAME" ] || [ -z "$GHCR_TOKEN" ]; then
+                echo "Error: GHCR_USERNAME and GHCR_TOKEN secrets are required when deploy_mode=registry"
+                exit 1
+              fi
+              echo "Logging in to ghcr.io..."
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin || exit 1
+            fi
+
+            docker volume create letsencrypt_certs || true
+            docker volume create certbot_logs || true
+
+            USE_BG=false
+            if [ "${{ inputs.blue_green_enabled }}" = "true" ]; then
+              if docker ps --format '{{.Names}}' | grep -q '^api-service$'; then
+                if docker ps --filter name=api-service --format '{{.Status}}' | grep -q 'healthy'; then
+                  USE_BG=true
+                  echo "Blue-green enabled and found healthy api-service container, using Blue/Green deploy"
+                else
+                  echo "Blue-green enabled but api-service container not healthy, using cold deploy"
+                fi
+              else
+                echo "Blue-green enabled but no api-service container found, using cold deploy"
+              fi
+            else
+              echo "Blue-green deployment disabled, using cold deploy"
+            fi
+
+            if [ "$USE_BG" = true ]; then
+              echo "Blue/Green mode: validating GREEN in app_new..."
+              if [ -d "$HOME/app_new" ]; then
+                cd "$HOME/app_new"
+                chmod +x scripts/local-containers-run.sh || true
+                if ! MIGRATIONS_RUN=${{ inputs.migrations_run }} ./scripts/local-containers-run.sh bg-validate ${{ inputs.api_env }}; then
+                  echo "Blue/Green validation failed. Cleaning up and falling back to cold deploy."
+                  docker stop api-service-green redis-green 2>/dev/null || true
+                  docker rm -f api-service-green redis-green 2>/dev/null || true
+                  cd "$HOME"
+                  USE_BG=false
+                else
+                  echo "GREEN validation successful. Proceeding with Blue/Green deploy."
+                fi
+                if [ "$USE_BG" = true ]; then
+                  cd "$HOME"
+                  echo "GREEN validated. Performing fast swap..."
+                  rm -rf "$HOME/app.bak" || true
+                  if [ -d "$HOME/app" ]; then mv "$HOME/app" "$HOME/app.bak" || true; fi
+                  mv "$HOME/app_new" "$HOME/app"
+                  cd "$HOME/app"
+                  chmod +x scripts/local-containers-run.sh || true
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} NGINX_MODE=${{ inputs.nginx_mode }} \
+                    docker-compose -f docker-compose.local.yml stop core-api redis || true
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} NGINX_MODE=${{ inputs.nginx_mode }} \
+                    docker-compose -f docker-compose.local.yml rm -f core-api redis || true
+                  if [ "$DEPLOY_MODE" = "registry" ] && [ -n "$CORE_API_IMAGE" ]; then
+                    docker pull "$CORE_API_IMAGE"
+                  else
+                    API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} NGINX_MODE=${{ inputs.nginx_mode }} \
+                      docker-compose -f docker-compose.local.yml build --no-cache core-api
+                  fi
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} NGINX_MODE=${{ inputs.nginx_mode }} CORE_API_IMAGE="$CORE_API_IMAGE" \
+                    docker-compose -f docker-compose.local.yml up -d core-api redis
+                  docker kill -s HUP core-nginx-service || ( \
+                    API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                      docker-compose -f docker-compose.local.yml stop nginx || true; \
+                    API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                      docker-compose -f docker-compose.local.yml rm -f nginx || true; \
+                    API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                      docker-compose -f docker-compose.local.yml up -d nginx \
+                  ) || true
+                  MIGRATIONS_RUN=${{ inputs.migrations_run }} ./scripts/local-containers-run.sh bg-down ${{ inputs.api_env }} || true
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                    docker-compose -f docker-compose.local.yml stop certbot prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana || true
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                    docker-compose -f docker-compose.local.yml rm -f certbot prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana || true
+                  API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                    docker-compose -f docker-compose.local.yml up -d certbot prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana redis
+                fi
+              else
+                echo "No app_new found. Falling back to cold deploy path."
+                if [ -d "$HOME/app" ]; then
+                  cd "$HOME/app" && [ -x scripts/local-containers-run.sh ] && ./scripts/local-containers-run.sh clean || true
+                fi
+                rm -rf "$HOME/app.bak" || true
+                if [ -d "$HOME/app" ]; then mv "$HOME/app" "$HOME/app.bak" || true; fi
+                mv "$HOME/app_new" "$HOME/app"
+                cd "$HOME/app" && chmod +x scripts/local-containers-run.sh
+                MIGRATIONS_RUN=${{ inputs.migrations_run }} CERTBOT_TEST_MODE=${{ inputs.certbot_test_mode }} CERTBOT_EMAIL=${{ inputs.certbot_email }} ./scripts/local-containers-run.sh https ${{ inputs.api_env }} -d ${{ inputs.domain }}
+              fi
+            else
+              echo "Cold deploy path..."
+              if [ -d "$HOME/app_new" ]; then
+                if [ -d "$HOME/app" ]; then
+                  cd "$HOME/app" && [ -x scripts/local-containers-run.sh ] && ./scripts/local-containers-run.sh clean || true
+                  cd "$HOME"
+                fi
+                rm -rf "$HOME/app.bak" || true
+                if [ -d "$HOME/app" ]; then mv "$HOME/app" "$HOME/app.bak" || true; fi
+                mv "$HOME/app_new" "$HOME/app"
+              fi
+              cd "$HOME/app"
+              chmod +x scripts/local-containers-run.sh
+              MIGRATIONS_RUN=${{ inputs.migrations_run }} CERTBOT_TEST_MODE=${{ inputs.certbot_test_mode }} CERTBOT_EMAIL=${{ inputs.certbot_email }} ./scripts/local-containers-run.sh https ${{ inputs.api_env }} -d ${{ inputs.domain }}
+              API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                docker-compose -f docker-compose.local.yml stop prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana || true
+              API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                docker-compose -f docker-compose.local.yml rm -f prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana || true
+              API_ENV=${{ inputs.api_env }} ENV_FILE=${{ inputs.env_file }} NGINX_MODE=${{ inputs.nginx_mode }} DOMAINS=${{ inputs.domain }} FIRST_DOMAIN=${{ inputs.domain }} \
+                docker-compose -f docker-compose.local.yml up -d prometheus nginx-prometheus-exporter prometheus-node-exporter cadvisor promtail loki telegraf grafana
+            fi
+
+      - name: 🧹 Cleanup backup on success
+        if: always() && steps.deploy_run.outcome == 'success'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.server_host }}
+          username: ${{ secrets.server_username }}
+          password: ${{ secrets.server_password }}
+          port: 22
+          script: |
+            if [ -d "$HOME/app.bak" ]; then
+              echo "Cleaning app.bak after successful deploy..."
+              rm -rf "$HOME/app.bak"
+            fi
+
+            echo "Logs certbot-init:"
+
+            cd $HOME/app || true
+            docker-compose -f docker-compose.local.yml logs certbot-init || true
+
+      - name: 🧹 Cleanup app_new containers and images
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.server_host }}
+          username: ${{ secrets.server_username }}
+          password: ${{ secrets.server_password }}
+          port: 22
+          script: |
+            echo "Logs certbot-init:"
+            cd $HOME/app || true
+            docker-compose -f docker-compose.local.yml logs certbot-init || true
+            docker-compose -f docker-compose.local.yml restart nginx || true
+
+            echo "🧹 Starting Docker cleanup..."
+            docker images --filter "reference=app_new_*" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true
+            docker rmi $(docker images --filter "reference=app_new_*" --format "{{.ID}}") 2>/dev/null || true
+            docker images --filter "dangling=true" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true
+            docker image prune -f || true
+            docker container prune -f || true
+            docker network prune -f || true
+            docker builder prune -f || true
+            docker volume prune -f || true
+
+            echo "✅ Docker cleanup completed"
+
+      
+  failure-notify:
+    if: ${{ failure() && inputs.notigy_enabled }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+    - name: ⬇️ Checkout repo
+      uses: actions/checkout@v2
+    - name: Send Telegram Message
+      env:
+        TG_TOKEN: ${{ secrets.tg_token }}
+        TG_CHAT_ID: ${{ secrets.tg_chat_id }}
+        TG_THREAD_ID: ${{ secrets.tg_thread_id }}
+        TG_STATUS: error
+        TG_TAG: ${{ inputs.tag }}
+        TG_API_ENV: ${{ inputs.api_env }}
+        TG_NGINX_MODE: ${{ inputs.nginx_mode }}
+        TG_DOMAIN: ${{ inputs.domain }}
+        TG_GRAFANA_ENABLED: ${{ inputs.grafana_enabled }}
+        GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        GITHUB_BRANCH_URL: https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}
+        GITHUB_COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+        GITHUB_AUTHOR_URL: https://github.com/${{ github.actor }}
+        GITHUB_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        bash scripts/notify-telegram.sh
+
+  success-notify:
+    if: ${{ success() && inputs.notigy_enabled }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+    - name: ⬇️ Checkout repo
+      uses: actions/checkout@v2
+    - name: Send Telegram Message
+      env:
+        TG_TOKEN: ${{ secrets.tg_token }}
+        TG_CHAT_ID: ${{ secrets.tg_chat_id }}
+        TG_THREAD_ID: ${{ secrets.tg_thread_id }}
+        TG_STATUS: success
+        TG_TAG: ${{ inputs.tag }}
+        TG_API_ENV: ${{ inputs.api_env }}
+        TG_NGINX_MODE: ${{ inputs.nginx_mode }}
+        TG_DOMAIN: ${{ inputs.domain }}
+        TG_GRAFANA_ENABLED: ${{ inputs.grafana_enabled }}
+        GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        GITHUB_BRANCH_URL: https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}
+        GITHUB_COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+        GITHUB_AUTHOR_URL: https://github.com/${{ github.actor }}
+        GITHUB_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        bash scripts/notify-telegram.sh
+
+  cancel-notify:
+    if: ${{ cancelled() && inputs.notigy_enabled }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+    - name: ⬇️ Checkout repo
+      uses: actions/checkout@v2
+    - name: Send Telegram Message
+      env:
+        TG_TOKEN: ${{ secrets.tg_token }}
+        TG_CHAT_ID: ${{ secrets.tg_chat_id }}
+        TG_THREAD_ID: ${{ secrets.tg_thread_id }}
+        TG_STATUS: cancelled
+        TG_TAG: ${{ inputs.tag }}
+        TG_API_ENV: ${{ inputs.api_env }}
+        TG_NGINX_MODE: ${{ inputs.nginx_mode }}
+        TG_DOMAIN: ${{ inputs.domain }}
+        TG_GRAFANA_ENABLED: ${{ inputs.grafana_enabled }}
+        GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        GITHUB_BRANCH_URL: https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}
+        GITHUB_COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+        GITHUB_AUTHOR_URL: https://github.com/${{ github.actor }}
+        GITHUB_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        bash scripts/notify-telegram.sh
+

@@ -1,0 +1,34 @@
+FROM docker.io/certbot/certbot:latest
+
+# Установка необходимых пакетов и проверка путей
+RUN apk update && \
+    apk add --no-cache \
+    curl \
+    bash \
+    openssl \
+    supervisor \
+    dcron \
+    docker-cli && \
+    echo "=== Finding supervisord ===" && \
+    find / -name supervisord 2>/dev/null && \
+    echo "=== Which supervisord ===" && \
+    which supervisord
+
+# Создаем директории для логов и конфигурации
+RUN mkdir -p /var/log/certbot /etc/supervisor/conf.d && \
+    chmod 755 /var/log/certbot
+
+# Копируем конфигурацию supervisor
+COPY .docker/supervisor/certbot.conf /etc/supervisor/conf.d/certbot.conf
+
+# Копируем скрипты
+COPY .docker/scripts/get-certificates.sh /scripts/get-certificates.sh
+COPY .docker/scripts/renew-certificates.sh /scripts/renew-certificates.sh
+COPY .docker/scripts/setup-cron.sh /scripts/setup-cron.sh
+RUN chmod +x /scripts/*.sh
+
+# Настраиваем cron для автоматического обновления сертификатов
+RUN /scripts/setup-cron.sh
+
+# Явно отключаем ENTRYPOINT из базового образа
+ENTRYPOINT []

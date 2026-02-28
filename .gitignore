@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+!.env.example
+
+# Certificates and certbot
+/certbot
+/certs
+/www
+
+grafana/prometheus/data
+
+dist/
+!certificates/*
