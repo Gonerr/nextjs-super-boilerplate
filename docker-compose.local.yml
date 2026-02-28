@@ -227,7 +227,7 @@ services:
         - API_ENV=${API_ENV:-prod}
     volumes:
       - ${ENV_FILE:-.env}:/usr/src/api/${ENV_FILE:-.env}:ro
-      - ./db-postgresql-certificate.${API_ENV:-prod}.crt:/usr/src/api/db-postgresql-certificate.${API_ENV:-prod}.crt:ro
+      - ./db-certificate.${API_ENV:-prod}.crt:/usr/src/api/db-certificate.${API_ENV:-prod}.crt:ro
       - /usr/src/api/node_modules
     environment:
       - API_ENV=${API_ENV:-prod}

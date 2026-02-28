@@ -101,7 +101,7 @@ on:
         required: true
       env:
         required: true
-      db_postgresql:
+      database_certificate:
         required: false
       ghcr_username:
         required: false
@@ -187,7 +187,7 @@ jobs:
         run: |
           if [ -n "${{ secrets.env }}" ]; then echo '${{ secrets.env }}' >> ${{ inputs.env_file }}; fi
           echo "NODE_ENV=${{ inputs.api_env }}" >> ${{ inputs.env_file }}
-          if [ -n "${{ secrets.db_postgresql }}" ]; then echo '${{ secrets.db_postgresql }}' >> db-postgresql-certificate.${{ inputs.api_env }}.crt; fi
+          if [ -n "${{ secrets.database_certificate }}" ]; then echo '${{ secrets.database_certificate }}' >> db-certificate.${{ inputs.api_env }}.crt; fi
 
       - name: 🔐 Login to GHCR and build core-api image (registry mode)
         if: inputs.deploy_mode == 'registry'
