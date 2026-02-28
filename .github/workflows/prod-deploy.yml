@@ -23,10 +23,10 @@ jobs:
       blue_green_enabled: true
       deploy_mode: 'registry'
       node_version: 24
-      registry_subname: 'sapian-web'
+      registry_subname: 'registry.example'
       notigy_enabled: true
+      tag: 'tag.example'
       grafana_enabled: true
-      tag: 'web'
       certbot_email: example@example.com
 
     secrets:
@@ -39,3 +39,5 @@ jobs:
       tg_token: ${{ secrets.TG_TOKEN }}
       tg_chat_id: ${{ secrets.TG_CHAT_ID }}
       tg_thread_id: ${{ secrets.TG_THREAD_ID }}
+      grafana_admin_user: ${{ secrets.GRAFANA_ADMIN_USER }}
+      grafana_admin_password: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}

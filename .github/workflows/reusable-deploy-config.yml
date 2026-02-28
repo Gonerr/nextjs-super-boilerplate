@@ -69,10 +69,22 @@ on:
         required: false
         default: true
         type: boolean
+
       certbot_email:
         description: Certbot email
         required: false
         default: example@example.com
+        type: string
+
+      grafana_admin_user:
+        description: Grafana admin user
+        required: false
+        default: admin
+        type: string
+      grafana_admin_password:
+        description: Grafana admin password
+        required: false
+        default: password.example
         type: string
 
     secrets:
@@ -232,12 +244,14 @@ jobs:
           CORE_API_IMAGE: ${{ env.CORE_API_IMAGE }}
           GHCR_USERNAME: ${{ secrets.ghcr_username }}
           GHCR_TOKEN: ${{ secrets.ghcr_token }}
+          GRAFANA_ADMIN_USER: ${{ inputs.grafana_admin_user }}
+          GRAFANA_ADMIN_PASSWORD: ${{ inputs.grafana_admin_password }}
         with:
           host: ${{ secrets.server_host }}
           username: ${{ secrets.server_username }}
           password: ${{ secrets.server_password }}
           port: 22
-          envs: GH_USERNAME, GITHUB_TOKEN, DEPLOY_MODE, CORE_API_IMAGE, GHCR_USERNAME, GHCR_TOKEN
+          envs: GH_USERNAME, GITHUB_TOKEN, DEPLOY_MODE, CORE_API_IMAGE, GHCR_USERNAME, GHCR_TOKEN, GRAFANA_ADMIN_USER, GRAFANA_ADMIN_PASSWORD
           command_timeout: 25m
           script: |
             if [ "$DEPLOY_MODE" = "registry" ]; then
