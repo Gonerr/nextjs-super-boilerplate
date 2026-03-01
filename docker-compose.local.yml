@@ -391,7 +391,7 @@ services:
 
   mongo:
     container_name: mongo${SUFFIX}
-    image: mongo:7.2
+    image: mongo:7
     restart: always
     networks:
       - api_network

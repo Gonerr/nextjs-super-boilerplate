@@ -3,11 +3,12 @@
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
+import { UserRole } from '~/api/user'
+import { routes } from '~/constants'
 import { useProfileQuery, useRefreshTokenQuery } from '~/query/auth'
+import { logger } from '~/utils/logger'
 
 import { AuthUserContext } from './useAuth'
-import { routes } from '~/constants'
-import { UserRole } from '~/api/user'
 
 const expectedRoutes = [routes.home.path, routes.login.path, routes.logout.path, routes.refresh.path, routes.uiKit.path]
 
@@ -24,6 +25,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const { data: profile, isLoading, refetch, isFetched } = useProfileQuery(isEnabled)
 
+  logger.info('AuthProvider profile', { profile, isEnabled, isFetched, isLoading, pathname })
+
   useEffect(() => {
     if (isEnabled && !isFetched) {
       refetch()
@@ -38,7 +41,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const values = useMemo(() => {
     return {
       authUser: profile ?? null,
-      isLoading: isLoading || !isClient,
+      isLoading: isEnabled ? isLoading || !isClient : !isClient,
       isFetched: isEnabled ? isFetched : true,
       isAdmin: profile?.role ? [UserRole.ADMIN].includes(profile?.role) : false,
       role: profile?.role ? profile?.role : null,

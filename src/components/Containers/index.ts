@@ -1,5 +1,4 @@
 export * from './Block'
 export * from './HorizontalContainer'
-export * from './IconLazy'
 export * from './ImageLoader'
 export * from './StickyContainer'

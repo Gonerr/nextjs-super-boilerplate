@@ -1,3 +1,5 @@
+'use client'
+
 import { CopyCheckIcon, CopyIcon } from 'lucide-react'
 import { ReactNode, useCallback, useState } from 'react'
 
@@ -27,7 +29,7 @@ export const CopyContainer = (props: Props) => {
       if (!content) return
 
       cp.copy(content)
-      notify(successNotifyText || 'Успешно скопировано', 'success')
+      notify(successNotifyText || 'Successfully copied', 'success')
       setCopied(true)
 
       setTimeout(() => setCopied(false), 1000)

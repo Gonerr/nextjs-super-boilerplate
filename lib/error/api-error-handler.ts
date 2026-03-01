@@ -1,5 +1,6 @@
 import { AxiosError, AxiosResponse } from 'axios'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '~/utils/logger'
 
 /**
  * Метод - обертка, для сокращения кода использования catch и проброса ошибок
@@ -13,6 +14,8 @@ export const apiErrorHandlerContainer =
       return await handler(res, req)
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
+        logger.error('apiErrorHandlerContainer AxiosError', error.response?.data, error.response?.status)
+
         return res.json(
           {
             message: error.response?.data?.message,
@@ -23,6 +26,8 @@ export const apiErrorHandlerContainer =
           },
         )
       }
+
+      logger.error('apiErrorHandlerContainer', error)
 
       const response = error && typeof error === 'object' && 'response' in error ? (error.response as AxiosResponse) : null
 

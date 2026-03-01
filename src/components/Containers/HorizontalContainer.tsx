@@ -6,7 +6,7 @@ export const HorizontalContainer = ({ children, className, container = true }: {
   return (
     <div
       className={cn(
-        'space-y-4 p-4 border border-border rounded-lg bg-background shadow-sm overflow-x-auto',
+        'flex flex-row gap-2 space-y-4 p-4 border border-border rounded-lg bg-background shadow-sm overflow-x-auto',
         {
           container: container,
         },

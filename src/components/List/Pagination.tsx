@@ -1,8 +1,10 @@
+'use client'
+
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Pagination as PaginationRoot, PaginationContent, PaginationEllipsis, PaginationItem } from '~/components/ui/pagination'
 
-import { Button } from '../ui'
+import { Button } from '../ui/button'
 
 type Props = {
   currentPage: number

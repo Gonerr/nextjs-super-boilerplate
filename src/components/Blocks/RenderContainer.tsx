@@ -7,7 +7,7 @@ import JSONPretty from 'react-json-pretty'
 
 import { cn } from '~/utils/cn'
 
-import { Button } from '../ui'
+import { Button, Typography } from '../ui'
 import { CopyContainer } from './CopyContainer'
 
 export const PrettyContainer = ({
@@ -36,7 +36,7 @@ export const PrettyContainer = ({
 
   return (
     <div className={cn('flex flex-col gap-2', className)} onClick={(e) => e.stopPropagation?.()}>
-      {title && typeof title === 'string' && <p className="text-md font-semibold">{title}</p>}
+      {title && typeof title === 'string' && <Typography variant="Body/M/Semibold">{title}</Typography>}
       {title && typeof title !== 'string' && title}
 
       {children}
@@ -64,7 +64,7 @@ export const PrettyContainer = ({
           )}
           <Button
             data-break-word-control="1"
-            className="absolute top-[2px] right-[32px] bg-white w-[28px] h-[28px] !p-0 flex items-center justify-center rounded-lg"
+            className="absolute top-[2px] right-[32px] bg-white hover:bg-white/90 w-[28px] h-[28px] !p-0 flex items-center justify-center rounded-lg"
             onClick={(e) => {
               e.stopPropagation?.()
               setBreakWordEnabled(!breakWordEnabled)

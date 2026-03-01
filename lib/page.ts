@@ -7,6 +7,7 @@ import { UserRole } from '~/api/user'
 import { getAxiosHeaders } from './getAxiosHeaders'
 import { logger } from '~/utils/logger'
 import { routes } from '~/constants'
+import { AxiosError } from 'axios'
 
 export type PageProps<T extends Record<string, unknown> | undefined = undefined> = {
   params: Promise<T>
@@ -122,12 +123,16 @@ export const defaultGuard = async <T extends Record<string, unknown> | undefined
           logger.info('defaultGuard redirect to refresh', nextPath, nextPath)
 
           return redirect(`/refresh?nextPath=${nextPath}`, RedirectType.replace)
-        } catch (error) {
+        } catch (error: unknown) {
           if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
             throw error
           }
 
-          logger.info('defaultGuard error verifyToken, redirect to logout', error, nextPath)
+          if (error instanceof AxiosError) {
+            logger.info('defaultGuard error verifyToken, redirect to logout', error.response?.data, nextPath)
+          } else {
+            logger.info('defaultGuard error verifyToken, redirect to logout', error, nextPath)
+          }
 
           return redirect(`/logout?nextPath=${nextPath}`, RedirectType.replace)
         }
@@ -142,7 +147,11 @@ export const defaultGuard = async <T extends Record<string, unknown> | undefined
       throw error // Перебрасываем дальше для Next.js
     }
 
-    logger.error('defaultGuard error global', error, nextPath)
+    if (error instanceof AxiosError) {
+      logger.error('defaultGuard error global', error.response?.data, nextPath)
+    } else {
+      logger.error('defaultGuard error global', error, nextPath)
+    }
 
     return false
   }

@@ -1,5 +1,5 @@
 export * from './BottomNavigation'
 export * from './Header'
 export * from './HeaderNavigation'
-export * from './SettingsNavigation'
+export * from './Settings/SettingsNavigation'
 export * from './types'

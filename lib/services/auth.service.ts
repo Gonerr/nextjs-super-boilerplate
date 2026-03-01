@@ -27,6 +27,7 @@ export class AuthService {
       email: data.email.toLowerCase(),
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
+      password: data.password,
     })
 
     return this.generateAuthResponse(user)

@@ -56,7 +56,7 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>((props, 
         {label} {required && <span className="text-destructive">*</span>}
       </Label>
       <div
-        className={cn({
+        className={cn('relative', {
           'flex w-full gap-4': !!additionalComponent,
           'flex-row-reverse': !!additionalComponent && additionalAlignment === 'left',
         })}
@@ -85,7 +85,16 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>((props, 
           aria-describedby={`${id}-description`}
           {...restProps}
         />
-        {additionalComponent}
+        {additionalComponent ? (
+          <div
+            className={cn('h-fit absolute top-0 bottom-0 translate-y-[25%]', {
+              'left-1': additionalAlignment === 'left',
+              'right-1': additionalAlignment === 'right',
+            })}
+          >
+            {additionalComponent}
+          </div>
+        ) : null}
       </div>
       {error && (
         <p className="mt-2 text-xs text-destructive" role="alert" aria-live="polite">

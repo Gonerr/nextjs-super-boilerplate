@@ -24,9 +24,10 @@ type Props = {
   href?: string
   target?: '_blank' | '_self' | '_parent' | '_top'
   htmlFor?: string
+  rel?: string
 }
 
-export const Typography: FC<Props> = ({ children, className, variant, asTag = 'p', href, target, htmlFor }) => {
+export const Typography: FC<Props> = ({ children, className, variant, asTag = 'p', rel, href, target, htmlFor }) => {
   const variantClasses: Record<Variant, string> = {
     'heading-1': 'md:text-4xl tracking-[4%] font-[700] text-6xl',
     'heading-2': 'md:text-2xl md:tracking-[2%] tracking-[4%] font-[700] text-4xl',
@@ -51,7 +52,16 @@ export const Typography: FC<Props> = ({ children, className, variant, asTag = 'p
       htmlFor={htmlFor}
       target={target}
       data-font-size={variant}
-      className={cn('font-[400] text-xl text-slate-800 dark:text-slate-100', variantClasses[variant ?? 'Body/M/Regular'], className)}
+      rel={rel}
+      className={cn(
+        'font-[400] text-xl',
+        variantClasses[variant ?? 'Body/M/Regular'],
+        {
+          'text-secondary-600': asTag === 'a',
+          'text-slate-800 dark:text-slate-100': asTag !== 'a',
+        },
+        className,
+      )}
     >
       {children}
     </SafetyTag>

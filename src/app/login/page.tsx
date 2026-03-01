@@ -9,8 +9,8 @@ import { useAuth } from '~/providers'
 import { useNotify } from '~/providers/notify'
 import { useLoginMutation, useLogoutQuery, useSignUpMutation } from '~/query/auth'
 
-const SignInBlock = React.lazy(() => import('~/components/Entities/Auth/Blocks/SignInBlock').then((module) => ({ default: module.SignInBlock })))
-const SignUpBlock = React.lazy(() => import('~/components/Entities/Auth/Blocks/SignUpBlock').then((module) => ({ default: module.SignUpBlock })))
+const SignInBlock = React.lazy(() => import('~/components/Views/Auth/Blocks/SignInBlock').then((module) => ({ default: module.SignInBlock })))
+const SignUpBlock = React.lazy(() => import('~/components/Views/Auth/Blocks/SignUpBlock').then((module) => ({ default: module.SignUpBlock })))
 
 // Компонент для работы с searchParams
 const LoginWithParams = () => {
@@ -95,6 +95,10 @@ const LoginWithParams = () => {
     },
     [],
   )
+
+  console.log('isClient', isClient)
+  console.log('isLoading', isLoading)
+  console.log('isLogoutLoading', isLogoutLoading)
 
   // Показываем loading до определения клиентского состояния
   if (!isClient || isLoading || isLogoutLoading) {
