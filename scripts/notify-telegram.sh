@@ -3,7 +3,8 @@
 set -euo pipefail
 
 # Обязательные переменные:
-# TG_TOKEN, TG_CHAT_ID, TG_THREAD_ID
+# TG_TOKEN, TG_CHAT_ID
+# TG_THREAD_ID — optional; if not set, reply_to_message_id is not sent (normal group or personal chat)
 # TG_STATUS: start|success|error
 # TG_TAG, TG_API_ENV, TG_NGINX_MODE, TG_DOMAIN, TG_METRICS_ENABLED (or TG_GRAFANA_ENABLED)
 # GITHUB_RUN_URL, GITHUB_BRANCH_URL, GITHUB_COMMIT_URL, GITHUB_AUTHOR_URL, GITHUB_MESSAGE
@@ -66,6 +67,9 @@ msg_text="${msg_text}<blockquote>
 </blockquote>
 "
 
-curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-  -d "chat_id=${TG_CHAT_ID}&text=${msg_text}&reply_to_message_id=${TG_THREAD_ID}&parse_mode=HTML"
+POST_DATA="chat_id=${TG_CHAT_ID}&text=${msg_text}&parse_mode=HTML"
+if [ -n "${TG_THREAD_ID:-}" ]; then
+  POST_DATA="${POST_DATA}&reply_to_message_id=${TG_THREAD_ID}"
+fi
+curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d "$POST_DATA"
 
