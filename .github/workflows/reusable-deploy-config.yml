@@ -124,6 +124,13 @@ on:
       tg_thread_id:
         required: false
 
+      grafana_admin_user:
+        description: Grafana admin user
+        required: false
+      grafana_admin_password:
+        description: Grafana admin password
+        required: false
+
 permissions:
   contents: read
   packages: write
