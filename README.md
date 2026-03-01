@@ -132,6 +132,7 @@ Common issues and fixes are described in the FAQ (see links above). Summary:
 | **MongoDB:** Registration fails, "Access control is not enabled", wrong user/password | Mongo init runs only on first start with empty data. Remove mongo volume, fix `MONGO_USER`/`MONGO_PASSWORD` in the GitHub `env` secret, then redeploy. See [FAQ](./docs/FAQ_EN.md#mongodb-wrong-init-data). |
 | **Env vars not in container** | Ensure the GitHub secret for `.env` content (e.g. `WEB_ENV_PROD`) includes all keys; redeploy so `.env.prod` is recreated. |
 | **No styles on prod** | Do not exclude `.next`/`out`/`build` from the image; they are built inside the Dockerfile. |
+| **Disk full: many ghcr.io images** | After each deploy the workflow prunes old app images on the server. To run manually: `./scripts/local-containers-run.sh prune-images`. For GHCR, see [FAQ](./docs/FAQ_EN.md#cleaning-old-docker-images). |
 
 For step-by-step instructions (Mongo reset, clean script, certbot email), see [docs/FAQ_RU.md](./docs/FAQ_RU.md) or [docs/FAQ_EN.md](./docs/FAQ_EN.md).
 

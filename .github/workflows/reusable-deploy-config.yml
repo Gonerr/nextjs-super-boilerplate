@@ -431,6 +431,20 @@ jobs:
             echo "🧹 Starting Docker cleanup..."
             docker images --filter "reference=app_new_*" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true
             docker rmi $(docker images --filter "reference=app_new_*" --format "{{.ID}}") 2>/dev/null || true
+
+            # Remove old registry images (ghcr.io/owner/name:*): keep only the image used by api-service
+            CURRENT_IMAGE=$(docker inspect api-service --format '{{.Config.Image}}' 2>/dev/null || true)
+            if [ -n "$CURRENT_IMAGE" ] && [[ "$CURRENT_IMAGE" == *"/"* ]]; then
+              REPO="${CURRENT_IMAGE%:*}"
+              echo "Keeping current api image: $CURRENT_IMAGE"
+              docker images "$REPO" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | while read -r img; do
+                if [ -n "$img" ] && [ "$img" != "$CURRENT_IMAGE" ] && [ "$img" != "<none>:<none>" ]; then
+                  echo "Removing old image: $img"
+                  docker rmi "$img" 2>/dev/null || true
+                fi
+              done
+            fi
+
             docker images --filter "dangling=true" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true
             docker image prune -f || true
             docker container prune -f || true

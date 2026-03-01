@@ -521,8 +521,43 @@ function clean() {
     echo "Cleaning up old app_new images..."
     docker images --filter "reference=app_new_*" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true
     docker rmi $(docker images --filter "reference=app_new_*" --format "{{.ID}}") 2>/dev/null || true
-    
+
+    # Remove old registry images (ghcr.io/...): keep only the image used by api-service
+    CURRENT_IMAGE=$(docker inspect api-service --format '{{.Config.Image}}' 2>/dev/null || true)
+    if [ -n "$CURRENT_IMAGE" ] && [[ "$CURRENT_IMAGE" == *"/"* ]]; then
+      REPO="${CURRENT_IMAGE%:*}"
+      echo "Keeping current api image: $CURRENT_IMAGE"
+      docker images "$REPO" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | while read -r img; do
+        if [ -n "$img" ] && [ "$img" != "$CURRENT_IMAGE" ] && [ "$img" != "<none>:<none>" ]; then
+          echo "Removing old image: $img"
+          docker rmi "$img" 2>/dev/null || true
+        fi
+      done
+    fi
+
     echo "✅ Cleanup completed"
+}
+
+# Prune old registry images only (keep image used by api-service). Use after deploy or when disk is full.
+function prune_registry_images() {
+    cd ${PROJECT_ROOT}
+    CURRENT_IMAGE=$(docker inspect api-service --format '{{.Config.Image}}' 2>/dev/null || true)
+    if [ -z "$CURRENT_IMAGE" ] || [[ "$CURRENT_IMAGE" != *"/"* ]]; then
+      echo "api-service not running or not a registry image. Listing all ghcr.io images:"
+      docker images --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" | grep ghcr.io || true
+      echo "Run 'clean' to stop containers, or specify image to keep: prune_registry_images <repo> <keep_tag>"
+      return 0
+    fi
+    REPO="${CURRENT_IMAGE%:*}"
+    echo "Keeping: $CURRENT_IMAGE"
+    docker images "$REPO" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | while read -r img; do
+      if [ -n "$img" ] && [ "$img" != "$CURRENT_IMAGE" ] && [ "$img" != "<none>:<none>" ]; then
+        echo "Removing: $img"
+        docker rmi "$img" 2>/dev/null || true
+      fi
+    done
+    docker image prune -f
+    echo "✅ Registry images pruned"
 }
 
 case "$1" in
@@ -547,10 +582,12 @@ case "$1" in
     "renew-certs")
         shift
         renew_certificates "$@" ;;
-    "clean") 
+    "clean")
         clean ;;
-    *) 
-        echo "Usage: ./scripts/local-containers-run.sh [http|https|rebuild|clean|renew-certs] [stage|prod] [-d domain1.com,domain2.com]"
+    "prune-images")
+        prune_registry_images ;;
+    *)
+        echo "Usage: ./scripts/local-containers-run.sh [http|https|rebuild|clean|prune-images|renew-certs] [stage|prod] [-d domain1.com,domain2.com]"
         echo "Environment variables:"
         echo "  MIGRATIONS_RUN=true|false   - Enable/disable database migrations (default: false)"
         echo "  REDIS_ENABLED=true|false   - Start Redis container (default: false)"
@@ -565,5 +602,6 @@ case "$1" in
         echo "  MIGRATIONS_RUN=true ./scripts/local-containers-run.sh https prod -d example.com"
         echo "  ./scripts/local-containers-run.sh https prod -d example.com,www.example.com"
         echo "  ./scripts/local-containers-run.sh renew-certs stage  # Renew certificates for stage environment"
+        echo "  ./scripts/local-containers-run.sh prune-images        # Remove old ghcr.io images, keep current api-service image"
         ;;
 esac

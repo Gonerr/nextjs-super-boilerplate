@@ -147,6 +147,38 @@ Check: rebuild the image locally (`docker build -f .docker/Dockerfile ...`) and 
 
 ---
 
+## Cleaning Old Docker Images
+
+### Server fills up with ghcr.io/… images (~2 GB each)
+
+**Cause:** With `deploy_mode: registry`, each deploy pushes a new image tagged with the commit SHA. The server pulls the new image on each deploy; old images stay and consume disk space.
+
+**What the template does:**
+
+- After each deploy, the workflow **Cleanup** step on the server removes all images of your app’s repository (e.g. `ghcr.io/owner/nextjs-super-boilerplate`) **except** the one used by the `api-service` container. So only the current image is kept.
+- The script `local-containers-run.sh` has a **prune-images** command that removes old images of the same repository, keeping the one used by `api-service`.
+
+**Manual cleanup on the server:**
+
+```bash
+cd ~/app
+./scripts/local-containers-run.sh prune-images
+```
+
+If `api-service` is not running, the command only lists `ghcr.io` images; you can remove them manually: `docker rmi ghcr.io/owner/name:sha`.
+
+**Cleaning GitHub Container Registry (ghcr.io):**
+
+Images in GHCR accumulate as well. Options:
+
+1. **Manual:** GitHub → repository → **Packages** (right side) → your package → **Package settings** → delete the package or individual versions if the UI allows. Or: profile → **Packages** → select package → **Manage versions** and delete old tags.
+2. **Retention:** In the package settings, check if there is an option to automatically remove old versions.
+3. **Via API:** The [GitHub Packages API](https://docs.github.com/en/rest/packages) lets you delete package versions. You can run a monthly workflow that lists versions and deletes all but the last N (e.g. using `gh api` or curl).
+
+Recommendation: with automatic cleanup on the server (already in the template), most space is freed there; clean GHCR manually or with a script if needed.
+
+---
+
 ## More
 
 - **Container logs:** `docker logs <container_name>` (e.g. `docker logs api-service`, `docker logs mongo`).
