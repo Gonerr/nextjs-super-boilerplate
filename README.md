@@ -2,7 +2,7 @@
 
 Minimal Next.js template with deploy (GitHub Actions), optional Docker stack (nginx, certbot, Redis, MongoDB, metrics), and auth + UI kit example.
 
-**Detailed article:** [RU](./article/article_ru.md) · [EN](./article/article_en.md)
+**Detailed article:** [RU](https://github.com/Fedorrychkov/fedorrychkov/blob/main/articles/standalone-nextjs-production-ready-boilerplate/ARTICLE_RU.md) · [EN](https://github.com/Fedorrychkov/fedorrychkov/blob/main/articles/standalone-nextjs-production-ready-boilerplate/ARTICLE_EN.md)
 
 ---
 

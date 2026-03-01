@@ -17,7 +17,7 @@ export default function Home() {
             </a>{' '}
             or the{' '}
             <a
-              href="https://github.com/Fedorrychkov/nextjs-super-boilerplate/blob/main/article/article_en.md"
+              href="https://github.com/Fedorrychkov/fedorrychkov/blob/main/articles/standalone-nextjs-production-ready-boilerplate/ARTICLE_EN.md"
               className="font-medium text-zinc-950 dark:text-zinc-50"
             >
               About boilerplate
