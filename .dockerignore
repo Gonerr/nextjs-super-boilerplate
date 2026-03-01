@@ -1,0 +1,48 @@
+# Secrets and env files with data - never go into the image
+.env
+.env.*
+.env.example
+
+# Git and history
+.git
+.gitignore
+.github
+
+# Dependencies - install inside the image
+node_modules
+
+# Build artifacts and cache
+.next
+out
+build
+dist
+*.tsbuildinfo
+next-env.d.ts
+
+# Tests and coverage
+coverage
+**/__tests__
+**/*.test.*
+**/*.spec.*
+
+# Documentation and runtime junk
+*.md
+!README.md
+article
+certbot
+certs
+www
+
+# Local development and debugging
+.DS_Store
+*.log
+.vercel
+
+# IDE / Editor
+.idea
+
+# Docker files
+.dockerignore
+Dockerfile*
+
+README.md

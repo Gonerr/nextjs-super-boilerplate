@@ -23,9 +23,9 @@ jobs:
       blue_green_enabled: true
       deploy_mode: 'registry'
       node_version: 24
-      registry_subname: 'registry.example'
+      registry_subname: 'nextjs-super-boilerplate'
       notigy_enabled: true
-      tag: 'tag.example'
+      tag: 'nextjs-super-boilerplate'
       redis_enabled: false
       metrics_enabled: false
       mongo_enabled: true
