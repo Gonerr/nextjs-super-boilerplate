@@ -96,10 +96,6 @@ const LoginWithParams = () => {
     [],
   )
 
-  console.log('isClient', isClient)
-  console.log('isLoading', isLoading)
-  console.log('isLogoutLoading', isLogoutLoading)
-
   // Show loading until client state is determined
   if (!isClient || isLoading || isLogoutLoading) {
     return <SpinnerScreen />

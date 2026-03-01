@@ -42,25 +42,71 @@ The `clean` command stops and removes all containers used by the script (nginx, 
 
 ---
 
-## MongoDB: Wrong Init Data
+## MongoDB: Authentication Errors and Recreating the Database
 
-### Registration fails; Mongo logs show "Access control is not enabled" or auth errors
+### Mongo logs: "UserNotFound", "Authentication failed", "Could not find user \"admin\" for db \"admin\""
 
-**Cause:** The MongoDB container was first created with an empty volume when `MONGO_INITDB_ROOT_*` was not set, or the `env` secret (e.g. WEB_ENV_PROD) was missing or had wrong `MONGO_USER` / `MONGO_PASSWORD`. User creation runs only on the **first** start with an empty data directory.
+**What’s going on:** MongoDB creates the root user (`MONGO_INITDB_ROOT_USERNAME` / `MONGO_INITDB_ROOT_PASSWORD`) **only on the first run**, when the data directory is **empty**. If the container was ever started without these variables (or with different values), the volume already contains data from that run — the `admin` user was never created, but authorization is enabled. Starting again with the correct env vars does not re-run init; the init script runs only once.
 
-**Solution (reset Mongo and re-create):**
+**Typical causes:**
 
-1. **SSH into the server** and go to the app directory: `cd ~/app`.
+- The volume was created before `MONGO_INITDB_*` was added to compose, or before the deploy workflow started sourcing `.env` into the shell before `docker-compose up`.
+- The secret (e.g. `WEB_ENV_PROD`) was missing or had wrong `MONGO_USER` / `MONGO_PASSWORD`, so the first start used defaults or empty values.
+- The wrong volume was removed: Docker Compose names volumes with a project prefix (e.g. `app_mongo_data` instead of just `mongo_data`), so the old volume without the user was still in use.
 
-2. **Stop and remove the Mongo container and its volume** (all Mongo data will be lost):
+---
+
+### Manual MongoDB recreation steps
+
+Run these on the server in the app directory (e.g. `cd ~/app`). **All data in this MongoDB instance will be lost.**
+
+1. **Stop and remove the mongo container**
    ```bash
-   API_ENV=prod ENV_FILE=.env.prod docker-compose -f docker-compose.local.yml stop mongo
-   API_ENV=prod ENV_FILE=.env.prod docker-compose -f docker-compose.local.yml rm -f mongo
-   docker volume ls | grep mongo
-   docker volume rm <mongo_volume_name>   # e.g. service-api-network_mongo_data or mongo_data
+   docker-compose -f docker-compose.local.yml stop mongo
+   docker-compose -f docker-compose.local.yml rm -f mongo
    ```
 
-3. **Check the GitHub secret:** In **Settings → Secrets**, the secret that holds the .env contents (e.g. `WEB_ENV_PROD`) must include:
+2. **Find the volume that holds MongoDB data**
+   ```bash
+   docker volume ls | grep mongo
+   ```
+   You may see both `app_mongo_data` (project-directory prefix) and `mongo_data`. The one in use is the one mounted by your compose file — usually the volume name from the `volumes:` section (e.g. `mongo_data`) shown with the project prefix, e.g. `app_mongo_data` or `<project_dir>_mongo_data`. You must remove **the volume that was actually used**, or the next `up` will mount the old data again.
+
+3. **Remove the volume(s)**
+   ```bash
+   docker volume rm app_mongo_data
+   docker volume rm mongo_data
+   ```
+   If a volume doesn’t exist, the command will error — that’s fine. The important part is removing the one that had mongo data (often `app_mongo_data` when the project lives in a directory named `app`).
+
+4. **Load env into the shell** (so docker-compose can substitute MONGO_USER / MONGO_PASSWORD into the mongo container)
+   ```bash
+   set -a
+   [ -f .env.prod ] && . ./.env.prod
+   set +a
+   export ENV_FILE=.env.prod API_ENV=prod
+   ```
+
+5. **Start mongo again**
+   ```bash
+   docker-compose -f docker-compose.local.yml up -d mongo
+   ```
+   On first start with an empty volume, MongoDB will run init and create the user from the environment.
+
+6. **Restart the app container if needed**
+   ```bash
+   docker-compose -f docker-compose.local.yml up -d core-api
+   ```
+
+**Verify:** connect with the same credentials as in `.env.prod`:
+   ```bash
+   docker exec -it mongo mongosh -u admin -p 'YOUR_PASSWORD' --authenticationDatabase admin --eval "db.adminCommand({ ping: 1 })"
+   ```
+   You should get `ok: 1`.
+
+---
+
+**GitHub secret:** In **Settings → Secrets**, the secret that holds the .env body (e.g. `WEB_ENV_PROD`) must include:
    ```env
    MONGO_HOST=mongo
    MONGO_PORT=27017
@@ -68,17 +114,9 @@ The `clean` command stops and removes all containers used by the script (nginx, 
    MONGO_PASSWORD=your_secure_password
    MONGO_DB=app
    ```
-   Special characters in the password are URL-encoded automatically by the app when building the connection string.
+Special characters in the password are URL-encoded by the app when building the connection string.
 
-4. **Redeploy** via GitHub Actions (push to the target branch). The workflow will recreate `.env.prod` from the secret; on the next `docker-compose up`, Mongo will start with an empty volume and create the `admin` user with the given password.
-
-**Alternatively**, start only Mongo manually after removing the volume (with env loaded):
-   ```bash
-   set -a; [ -f .env.prod ] && . ./.env.prod; set +a
-   export ENV_FILE=.env.prod API_ENV=prod
-   docker-compose -f docker-compose.local.yml up -d mongo
-   ```
-   Then restart core-api if needed.
+**Using deploy instead:** After removing the container and the correct volume, you can skip manual mongo start and redeploy via GitHub Actions (push to the target branch). The workflow will create `.env.prod` from the secret; on the next `docker-compose up`, mongo will start with an empty volume and create the user.
 
 ---
 

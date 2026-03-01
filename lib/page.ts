@@ -1,3 +1,4 @@
+import { APP_INTERNAL_ORIGIN } from '@config/env'
 import { AxiosError } from 'axios'
 import { cookies, headers } from 'next/headers'
 import { redirect, RedirectType } from 'next/navigation'
@@ -63,6 +64,8 @@ export const defaultGuard = async <T extends Record<string, unknown> | undefined
   const host = headersStore.get('host') || ''
   const protocol = headersStore.get('x-forwarded-proto') || 'http'
   const origin = `${protocol}://${host}`
+  // Use internal origin for server-side API calls when set (e.g. Docker: public hostname may be unresolvable → EAI_AGAIN)
+  const apiOrigin = APP_INTERNAL_ORIGIN || origin
   const path = buildPathnameBySegments(segments, params)
 
   const url = new URL(`${origin}/${path ? `${path === '/' ? '' : path}` : ''}`)
@@ -82,7 +85,7 @@ export const defaultGuard = async <T extends Record<string, unknown> | undefined
     nextPath,
   })
 
-  const api = new ClientAuthApi(origin)
+  const api = new ClientAuthApi(apiOrigin)
 
   try {
     if (!accessToken && !refreshToken) {
