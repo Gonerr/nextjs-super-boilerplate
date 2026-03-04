@@ -27,7 +27,7 @@ jobs:
       notigy_enabled: true
       tag: 'nextjs-super-boilerplate'
       redis_enabled: false
-      metrics_enabled: true
+      metrics_enabled: false
       mongo_enabled: true
 
     secrets:
