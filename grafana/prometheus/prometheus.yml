@@ -1,7 +1,8 @@
 # source https://prometheus.io/docs/prometheus/latest/getting_started/
 
 global:
-  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+  # By default, scrape targets every 60 seconds (less load on small VPS).
+  scrape_interval:     60s
 
   # Attach these labels to any time series or alerts when communicating with
   # external systems (federation, remote storage, Alertmanager).
@@ -14,8 +15,8 @@ scrape_configs:
   # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
   - job_name: 'prometheus'
 
-    # Override the global default and scrape targets from this job every 5 seconds.
-    scrape_interval: 5s
+    # Override the global default and scrape targets from this job every 30 seconds.
+    scrape_interval: 30s
 
     static_configs:
     # prometheus

@@ -194,6 +194,7 @@ jobs:
           bash scripts/notify-telegram.sh
 
       - name: 📥 Install dependencies
+        if: inputs.deploy_mode != 'registry'
         run: |
           npm install --legacy-peer-deps
 
@@ -420,7 +421,14 @@ jobs:
             echo "Logs certbot-init:"
             cd $HOME/app || true
             docker-compose -f docker-compose.local.yml logs certbot-init || true
-            docker-compose -f docker-compose.local.yml restart nginx || true
+
+            echo "Restarting nginx with proper env context after deploy..."
+            API_ENV=${{ inputs.api_env }} \
+            ENV_FILE=${{ inputs.env_file }} \
+            NGINX_MODE=${{ inputs.nginx_mode }} \
+            DOMAINS=${{ inputs.domain }} \
+            FIRST_DOMAIN=${{ inputs.domain }} \
+              docker-compose -f docker-compose.local.yml restart nginx || true
 
             echo "🧹 Starting Docker cleanup..."
             docker images --filter "reference=app_new_*" --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}" || true

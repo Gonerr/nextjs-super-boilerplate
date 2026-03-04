@@ -103,6 +103,7 @@ Example: to serve the app at `app.myproject.com`, create A record `app` → `203
 - **OS:** Ubuntu **22.04 LTS or newer** (recommended). The deploy scripts are tested on Ubuntu.
 - **Docker & Docker Compose:** Required on the **server** for deploy. Install: [Docker Engine](https://docs.docker.com/engine/install/ubuntu/), [Docker Compose](https://docs.docker.com/compose/install/).
 - **Local machine:** For running full stack or scripts that use Docker (e.g. `make up-local`, or deploy scripts if you run them locally), you need **Docker** and **docker-compose** installed and the Docker daemon running.
+ - **CPU recommendation:** For the full metrics stack (Prometheus + Grafana + Loki + exporters) use at least **2 vCPUs**. On a single‑core VPS the metrics stack can easily saturate CPU and disk I/O; consider running only the core app without metrics in that case.
 
 ### Manual monitoring on the server
 
@@ -252,6 +253,15 @@ The template includes sensible defaults for bundle size, but you can further opt
 
     which leverages hashed filenames for long‑lived browser caching.
 
+- **Metrics stack resource considerations**
+
+  - The full metrics stack (Prometheus, Grafana, Loki, Promtail, Telegraf, exporters) is quite heavy for a **single‑core VPS**.  
+    On 1 vCPU you may see frequent 80–100% CPU usage and high disk I/O when exploring logs or wide time ranges in Grafana.
+  - Recommended configurations:
+    - **Small VPS (1 vCPU, <2 GB RAM):** run only core services (nginx + app + DB). Keep `metrics_enabled: false` in deploy workflows and use manual CLI monitoring (`top`, `docker stats`, `journalctl`, etc.).
+    - **Diagnostics mode on small VPS:** temporarily enable `metrics_enabled: true`, keep Grafana queries narrow (short time ranges, filtered by container), disable system log scraping in Promtail/Telegraf, then turn metrics off again when done.
+    - **Normal monitoring:** for always‑on metrics/logs, use **2+ vCPUs** and enough disk. On such servers you can safely increase detail: lower `scrape_interval` in `grafana/prometheus/prometheus.yml` and enable additional log/system inputs in `grafana/promtail-config.yml` and `grafana/telegraf/telegraf.conf` if you need more granular data.
+
 
 ## Troubleshooting
 
@@ -266,6 +276,7 @@ Common issues and fixes are described in the FAQ (see links above). Summary:
 | **No styles on prod** | Do not exclude `.next`/`out`/`build` from the image; they are built inside the Dockerfile. |
 | **Disk full: many ghcr.io images** | After each deploy the workflow prunes old app images on the server. To run manually: `./scripts/local-containers-run.sh prune-images`. For GHCR, see [FAQ](./docs/FAQ_EN.md#cleaning-old-docker-images). |
 | **Build: "no space left on device"** | Free disk on the server: `./scripts/local-containers-run.sh prune-images`, then `docker system prune -a -f`. Or use `deploy_mode: registry` to build in CI. See [FAQ](./docs/FAQ_EN.md#build-on-server-no-space-left-on-device). |
+| **Metrics stack overloads 1‑core VPS (CPU 100%, 502 on Grafana)** | Either disable metrics (`metrics_enabled: false`) and use only core services, or move to a VPS with 2+ vCPUs. If metrics must run on 1 vCPU, keep Prometheus scrape intervals high, limit Promtail/Telegraf inputs, and keep Grafana queries short and filtered. |
 
 For step-by-step instructions (Mongo reset, clean script, certbot email), see [docs/FAQ_RU.md](./docs/FAQ_RU.md) or [docs/FAQ_EN.md](./docs/FAQ_EN.md).
 
