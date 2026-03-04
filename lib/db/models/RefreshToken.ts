@@ -9,6 +9,10 @@ export interface IRefreshToken extends Document {
 
 const RefreshTokenSchema: Schema = new Schema(
   {
+    _id: {
+      type: Schema.Types.ObjectId,
+      default: () => new mongoose.Types.ObjectId(),
+    },
     token: {
       type: String,
       required: true,

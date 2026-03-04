@@ -10,6 +10,23 @@ http {
     proxy_headers_hash_max_size 1024;
     proxy_headers_hash_bucket_size 128;
 
+    # Gzip compression for static assets and HTML
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_vary on;
+    gzip_types
+      text/plain
+      text/css
+      text/javascript
+      application/javascript
+      application/x-javascript
+      application/json
+      application/xml
+      application/xml+rss
+      font/woff2
+      font/woff;
+
     upstream backend {
         server api-service:3000;  # Fixed container name
     }
@@ -108,6 +125,16 @@ http {
             add_header Content-Type "text/plain" always;
             add_header X-Debug-Path "$document_root$uri" always;
             add_header X-Real-Path $request_filename always;
+        }
+
+        # Cache Next.js static assets (safe: filenames contain content hash)
+        location ~* ^/_next/static/ {
+            proxy_pass http://backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            add_header Cache-Control "public, max-age=2592000, immutable";
         }
 
         # METRICS_GRAFANA_LOCATION_START

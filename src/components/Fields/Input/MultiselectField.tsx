@@ -1,7 +1,7 @@
 'use client'
 
-import { isNil } from 'lodash'
 import isArray from 'lodash/isArray'
+import isNil from 'lodash/isNil'
 import { forwardRef } from 'react'
 
 import { Label, Option } from '~/components/ui'

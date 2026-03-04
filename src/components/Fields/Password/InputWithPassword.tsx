@@ -1,6 +1,6 @@
 'use client'
 
-import { get } from 'lodash'
+import get from 'lodash/get'
 import { Check, Eye, EyeOff, X } from 'lucide-react'
 import { forwardRef, useId, useMemo, useState } from 'react'
 import { Controller, useFormContext } from 'react-hook-form'

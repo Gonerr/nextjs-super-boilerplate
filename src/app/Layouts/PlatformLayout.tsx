@@ -2,7 +2,7 @@
 
 import { HomeIcon, UserIcon, WrenchIcon } from 'lucide-react'
 
-import { Sidebar } from '~/components/ui'
+import { Sidebar } from '~/components/ui/sidebar'
 import { routes } from '~/constants'
 import { useAuth } from '~/providers'
 
